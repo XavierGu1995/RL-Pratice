@@ -8,7 +8,7 @@
 
 ---
 ### References
-* 莫烦强化学习/Pytorch系列教程: https://morvanzhou.github.io/about/
+* 莫烦强化学习/Pytorch系列教程: https://morvanzhou.github.io
 * OpenAI baseline implementation：https://github.com/openai/baselines
 * DeepMind：https://github.com/deepmind
 * PyTorch Documents: https://pytorch.org/docs/stable/index.html
