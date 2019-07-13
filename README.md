@@ -2,7 +2,6 @@
 
 
 ### Dependicies:
-* **System**: Windows 10
 * **Language**: Python 3.6
 * **Packages**: pytorch, numpy, gym
 
