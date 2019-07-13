@@ -3,41 +3,50 @@ import torch
 import torch.nn as nn
 import gym
 
-LR_A = 0.001
+LR_A = 0.01
 LR_C = 0.01
 GAMMA = 0.9
-MAX_EPISODES = 3000
-MAX_EP_STEPS = 1000
-DISPLAY_REWARD_THRESHOLD = 200
+MAX_EPISODE = 1000
+MAX_EP_STEP = 200
+DISPLAY_REWARD_THRESHOLD = -100
 
-ENV_NAME = 'CartPole-v0'
+ENV_NAME = 'Pendulum-v0'
 RENDER = False
+
+np.random.seed(1)
 
 
 class ActorNet(nn.Module):
 
-    def __init__(self, s_dim, a_dim):
+    def __init__(self, s_dim, a_bound):
         super(ActorNet, self).__init__()
-        self.fc1 = nn.Linear(s_dim, 20)
+        self.a_bound = a_bound
+        self.fc1 = nn.Linear(s_dim, 30)
         self.fc1.weight.data.normal_(0, 0.1)
-        self.out = nn.Linear(20, a_dim)
-        self.out.weight.data.normal_(0, 0.1)
+        self.mu = nn.Linear(30, 1)
+        self.mu.weight.data.normal_(0, 0.1)
+        self.sigma = nn.Linear(30, 1)
+        self.sigma.weight.data.normal_(0, 0.1)
 
     def forward(self, x):
         x = self.fc1(x)
-        x = torch.tanh(x)
-        x = self.out(x)
-        actions_prob = torch.softmax(x, dim=1)
-        return actions_prob
+        x = torch.relu(x)
+        mu = self.mu(x)
+        mu = torch.tanh(mu)
+        sigma = self.sigma(x)
+        sigma = nn.functional.softplus(sigma)
+        normal_dist = torch.distributions.normal.Normal(
+            mu * torch.tensor(self.a_bound), sigma + 0.1)
+        return normal_dist
 
 
 class CriticNet(nn.Module):
 
     def __init__(self, s_dim):
         super(CriticNet, self).__init__()
-        self.fc1 = nn.Linear(s_dim, 20)
+        self.fc1 = nn.Linear(s_dim, 30)
         self.fc1.weight.data.normal_(0, 0.1)
-        self.out = nn.Linear(20, 1)
+        self.out = nn.Linear(30, 1)
         self.out.weight.data.normal_(0, 0.1)
 
     def forward(self, x):
@@ -49,11 +58,11 @@ class CriticNet(nn.Module):
 
 class A2C(object):
 
-    def __init__(self, s_dim, a_dim):
+    def __init__(self, s_dim, a_bound):
         self.s_dim = s_dim
-        self.a_dim = a_dim
+        self.a_bound = a_bound
 
-        self.Actor = ActorNet(s_dim, a_dim)
+        self.Actor = ActorNet(s_dim, a_bound)
         self.Critic = CriticNet(s_dim)
 
         self.Actor_optimizer = torch.optim.Adam(
@@ -62,18 +71,20 @@ class A2C(object):
             self.Critic.parameters(), lr=LR_C)
 
     def choose_action(self, s):
-        s = torch.unsqueeze(torch.tensor(s, dtype=torch.float32), 0)
-        prob_weights = self.Actor.forward(s).detach()
-        prob_weights.requires_grad = False
-        a = np.random.choice(range(prob_weights.shape[1]),
-                             p=prob_weights.squeeze().numpy())
+        s = torch.unsqueeze(
+            torch.tensor(s, dtype=torch.float32), 0).reshape(1, self.s_dim)
+        normal_dist = self.Actor.forward(s)
+        a = np.clip(normal_dist.sample(), -self.a_bound, self.a_bound)
         return a
 
     def learn(self, s, a, r, s_):
-        # train CriticNet
-        s = torch.unsqueeze(torch.tensor(s, dtype=torch.float32), 0)
-        s_ = torch.unsqueeze(torch.tensor(s_, dtype=torch.float32), 0)
+        s = torch.unsqueeze(
+            torch.tensor(s, dtype=torch.float32), 0).reshape(1, self.s_dim)
+        s_ = torch.unsqueeze(
+            torch.tensor(s_, dtype=torch.float32), 0).reshape(1, self.s_dim)
+        a = torch.tensor(a, dtype=torch.float32)
 
+        # CriticNet loss
         td_error = r + GAMMA * self.Critic.forward(s_) - self.Critic.forward(s)
         td_error_for_actor = td_error.detach()
         critic_loss = torch.pow(td_error, 2)
@@ -82,11 +93,10 @@ class A2C(object):
         critic_loss.backward()
         self.Critic_optimizer.step()
 
-        # train ActorNet
-        prob_weights = self.Actor(s).gather(
-            1, torch.tensor([[a]], dtype=torch.long))
-        log_prob_weights = torch.log(prob_weights)
-        actor_loss = -td_error_for_actor * log_prob_weights
+        # ActorNet loss
+        normal_dist = self.Actor.forward(s)
+        actor_loss = normal_dist.log_prob(
+            a) * td_error_for_actor + 0.01 * normal_dist.entropy()
 
         self.Actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -102,14 +112,14 @@ if __name__ == '__main__':
     env = env.unwrapped
 
     state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.n
+    action_bound = env.action_space.high
 
-    RL = A2C(state_dim, action_dim)
+    RL = A2C(state_dim, action_bound)
 
-    for i_episode in range(MAX_EPISODES):
+    for i_episode in range(MAX_EPISODE):
         state = env.reset()
         t = 0
-        track_r = []
+        ep_rs = []
         while True:
             if RENDER:
                 env.render()
@@ -118,23 +128,18 @@ if __name__ == '__main__':
 
             state_, reward, done, info = env.step(action)
 
-            if done:
-                reward = -20
-
-            track_r.append(reward)
-
-            RL.learn(state, action, reward, state_)
+            RL.learn(state, action, reward / 10, state_)
 
             state = state_
             t += 1
+            ep_rs.append(reward)
 
-            if done or t >= MAX_EP_STEPS:
-                ep_rs_sum = sum(track_r)
-
+            if t > MAX_EP_STEP:
+                ep_rs_sum = sum(ep_rs)
                 if 'running_reward' not in globals():
                     running_reward = ep_rs_sum
                 else:
-                    running_reward = running_reward * 0.95 + ep_rs_sum * 0.05
+                    running_reward = running_reward * 0.9 + ep_rs_sum * 0.1
                 if running_reward > DISPLAY_REWARD_THRESHOLD:
                     RENDER = True  # rendering
                 print("episode:", i_episode, "  reward:", int(running_reward))
