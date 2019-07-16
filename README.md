@@ -3,7 +3,8 @@
 
 ### Dependicies:
 * **Language**: Python 3.6
-* **Packages**: pytorch, numpy, gym
+* **Packages**: pytorch 1.0, numpy, gym, matplotlib
+* **Environment**: OPENAI Gym
 
 
 ---
