@@ -2,9 +2,9 @@
 
 
 ### Dependicies:
-* **Language**: Python 3.6
-* **Packages**: pytorch 1.0, numpy, gym, matplotlib
-* **Environment**: OPENAI Gym
+* **Language:**  Python 3.6
+* **Packages:**  pytorch 1.0, numpy, gym, matplotlib
+* **Environment:**  OpenAI Gym
 
 
 ---
