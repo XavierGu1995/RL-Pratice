@@ -53,7 +53,7 @@ class PolicyGradient(object):
 
     def learn(self):
         r = 0
-        for t in range(len(self.ep_rs)):
+        for t in range(len(self.ep_rs)):  # 这地方有点问题
             r = r * GAMMA + self.ep_rs[t]
 
         s = torch.tensor(self.ep_obs, dtype=torch.float32)
@@ -61,7 +61,7 @@ class PolicyGradient(object):
 
         prob_weights = self.net(s).gather(1, a.reshape(len(self.ep_rs), 1))
         log_prob_weights = torch.log(prob_weights)
-        loss = -(r - 200) * torch.mean(log_prob_weights)
+        loss = -(r - 200) * torch.mean(log_prob_weights)  # baseline控制
 
         self.optimizer.zero_grad()
         loss.backward()

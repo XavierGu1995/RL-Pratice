@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import gym
 
+# hyper parameters
 LR_A = 0.01
 LR_C = 0.01
 GAMMA = 0.9
@@ -12,8 +13,6 @@ DISPLAY_REWARD_THRESHOLD = -100
 
 ENV_NAME = 'Pendulum-v0'
 RENDER = False
-
-np.random.seed(1)
 
 
 class ActorNet(nn.Module):
@@ -84,7 +83,7 @@ class A2C(object):
             torch.tensor(s_, dtype=torch.float32), 0).reshape(1, self.s_dim)
         a = torch.tensor(a, dtype=torch.float32)
 
-        # CriticNet loss
+        # update CriticNet
         td_error = r + GAMMA * self.Critic.forward(s_) - self.Critic.forward(s)
         td_error_for_actor = td_error.detach()
         critic_loss = torch.pow(td_error, 2)
@@ -93,7 +92,7 @@ class A2C(object):
         critic_loss.backward()
         self.Critic_optimizer.step()
 
-        # ActorNet loss
+        # update ActorNet
         normal_dist = self.Actor.forward(s)
         actor_loss = normal_dist.log_prob(
             a) * td_error_for_actor + 0.01 * normal_dist.entropy()

@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import gym
 
+# hyper parameters
 MAX_EPISODES = 200
 MAX_EP_STEPS = 200
 LR_A = 0.001
@@ -12,10 +13,12 @@ TAU = 0.01
 MEMORY_CAPACITY = 10000
 BATCH_SIZE = 32
 
+# Gym environment
 RENDER = False
 ENV_NAME = 'Pendulum-v0'
 
 
+# build network
 class ActorNet(nn.Module):
 
     def __init__(self, s_dim, a_dim):
@@ -53,6 +56,7 @@ class CriticNet(nn.Module):
         return action_value
 
 
+# RL brain
 class DDPG(object):
 
     def __init__(self, s_dim, a_dim):
@@ -106,7 +110,7 @@ class DDPG(object):
             batch[:, -self.s_dim - 1:-self.s_dim], dtype=torch.float32)
         batch_s_ = torch.tensor(batch[:, -self.s_dim:], dtype=torch.float32)
 
-        # train ActorNet
+        # update ActorNet
         a = self.Actor_eval(batch_s)
         q = self.Critic_eval(batch_s, a)
 
@@ -116,7 +120,7 @@ class DDPG(object):
         actor_loss.backward()
         self.Actor_optimizer.step()
 
-        # train CriticNet
+        # update CriticNet
         a_ = self.Actor_target(batch_s_)
         q_ = self.Critic_target(batch_s_, a_)
 
