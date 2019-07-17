@@ -4,36 +4,39 @@ import torch.nn as nn
 import gym
 
 # hyper parameters
-MAX_EPISODES = 200
-MAX_EP_STEPS = 200
+MAX_EPISODE = 200
+MAX_EP_STEP = 200
 LR_A = 0.001
 LR_C = 0.002
 GAMMA = 0.9
-TAU = 0.01
+TAU = 0.01     # soft replacement
 MEMORY_CAPACITY = 10000
 BATCH_SIZE = 32
 
 # Gym environment
 RENDER = False
 ENV_NAME = 'Pendulum-v0'
+DISPLAY_REWARD_THRESHOLD = -300
 
 
 # build network
 class ActorNet(nn.Module):
 
-    def __init__(self, s_dim, a_dim):
+    def __init__(self, s_dim, a_dim, a_bound):
         super(ActorNet, self).__init__()
         self.fc1 = nn.Linear(s_dim, 30)
         self.fc1.weight.data.normal_(0, 0.1)
         self.fc2 = nn.Linear(30, a_dim)
         self.fc2.weight.data.normal_(0, 0.1)
 
+        self.a_bound = a_bound
+
     def forward(self, x):
         x = self.fc1(x)
         x = torch.relu(x)
         x = self.fc2(x)
-        x = torch.tanh(x)
-        action_value = x * 2
+        x = torch.tanh(x)  # tanh activate to [-1, 1]
+        action_value = x * torch.tensor(self.a_bound, dtype=torch.float32)  # multiply action_bound to fill action space
         return action_value
 
 
@@ -59,7 +62,7 @@ class CriticNet(nn.Module):
 # RL brain
 class DDPG(object):
 
-    def __init__(self, s_dim, a_dim):
+    def __init__(self, s_dim, a_dim, a_bound):
         self.s_dim, self.a_dim = s_dim, a_dim
         self.memory = np.zeros(
             (MEMORY_CAPACITY,
@@ -67,8 +70,8 @@ class DDPG(object):
             dtype=np.float)
         self.pointer = 0
 
-        self.Actor_target = ActorNet(s_dim, a_dim)
-        self.Actor_eval = ActorNet(s_dim, a_dim)
+        self.Actor_target = ActorNet(s_dim, a_dim, a_bound)
+        self.Actor_eval = ActorNet(s_dim, a_dim, a_bound)
         self.Critic_target = CriticNet(s_dim, a_dim)
         self.Critic_eval = CriticNet(s_dim, a_dim)
 
@@ -143,21 +146,24 @@ if __name__ == '__main__':
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
+    action_bound = env.action_space.high
 
-    RL = DDPG(state_dim, action_dim)
+    RL = DDPG(state_dim, action_dim, action_bound)
 
-    var = 3
+    var = 3  # Gauss exploration noise
 
-    for i in range(MAX_EPISODES):
+    for i in range(MAX_EPISODE):
         state = env.reset()
         ep_reward = 0
 
-        for j in range(MAX_EP_STEPS):
+        for j in range(MAX_EP_STEP):
             if RENDER:
                 env.render()
 
             action = RL.choose_action(state)
-            action = np.clip(np.random.normal(action, var), -2, 2)
+            action = np.clip(
+                np.random.normal(
+                    action, var), -2, 2)  # explore action
 
             state_, reward, done, info = env.step(action)
 
@@ -170,15 +176,10 @@ if __name__ == '__main__':
             state = state_
             ep_reward += reward
 
-            if j == MAX_EP_STEPS - 1:
-                print(
-                    'Episode:',
-                    i,
-                    'Reward: %i' %
-                    int(ep_reward),
-                    'Explore: %.2f' %
-                    var,
-                )
+            if j == MAX_EP_STEP - 1:
+                print('Episode:', i,
+                      'Reward: %i' % int(ep_reward),
+                      'Explore: %.2f' % var)
                 if ep_reward > -300:
                     RENDER = True
                 break

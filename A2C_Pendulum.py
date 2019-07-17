@@ -9,10 +9,11 @@ LR_C = 0.01
 GAMMA = 0.9
 MAX_EPISODE = 1000
 MAX_EP_STEP = 200
-DISPLAY_REWARD_THRESHOLD = -100
 
+# Gym environment
 ENV_NAME = 'Pendulum-v0'
 RENDER = False
+DISPLAY_REWARD_THRESHOLD = -100
 
 
 class ActorNet(nn.Module):
